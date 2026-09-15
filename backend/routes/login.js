@@ -1,7 +1,7 @@
 import express from "express";
-import connection from "./config/connect_db.js";
-import UserModel from "./models/models.js";
-import { sequelize } from "./config/connect_db.js";
+import connection from "../config/connect_db.js";
+import UserModel from "../models/models.js";
+import { sequelize } from "../config/connect_db.js";
 
 const router = express.Router();
 const User = sequelize.models.User || UserModel(sequelize);

@@ -1,9 +1,9 @@
 import express from "express";
-import connection, { sequelize } from "./config/connect_db.js";
-import User_m from "./models/models.js";
+import connection, { sequelize } from "../config/connect_db.js";
+import User_m from "../models/models.js";
 import session from "express-session";
-import loginRouter from "./routes/login.js";
-import dashboardRouter from "./routes/dashboard.js";
+import loginRouter from "./login.js";
+import dashboardRouter from "./dashboard.js";
 import cors from "cors";
 
 const app = express();
