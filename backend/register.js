@@ -1,12 +1,11 @@
 import express from "express";
-import connection, { sequelize } from "./config/connect_db.js";
-import User_m from "./models/models.js";
 import session from "express-session";
-import loginRouter from "./routes/login.js";
-import dashboardRouter from "./routes/dashboard.js";
+import authRouter from "./routes/authRoutes.js";
+import boardRouter from "./routes/boardRoutes.js";
 import cors from "cors";
-import columnRoutes from "./routes/coloumn_routes.js";
+import columnRouter from "./routes/columnRoutes.js";
 import cardRoutes from "./routes/cardRoutes.js";
+import labelRoutes from "./routes/labelRoutes.js";
 
 
 
@@ -28,40 +27,15 @@ app.use(cors({
 
 
 
-export const User =User_m(sequelize);
-app.use(loginRouter);
-app.use("/api/boards", dashboardRouter);
-app.use('/api', columnRoutes);
+app.use(authRouter);
+app.use("/api/boards", boardRouter);
+app.use('/api', columnRouter);
 app.use('/api', cardRoutes);
+app.use('/api', labelRoutes);
 
 app.get("/login", (req, res) => {
   res.status(200).json({ message: "Send a POST request with email and password to log in" });
 });
-
-app.post("/register", async (req, res) => {
-   try {
-   await connection();
-   const { name, email, password } = req.body;
- 
-   if (!name || !email || !password) {
-     return res.status(400).json({ message: "name, email, and password are required" });
-     }
-   const user = await User.create({
-     name, email, password
-     });
- 
-   res.status(201).json({ message: "user created successfully", username: user.name });
- 
-   } catch (error) {
-  res.status(500).json({ message: error.message });
-
-   }
-});
-
-
-
-
-
 
 const port = 3000;
 app.listen(port, () => {

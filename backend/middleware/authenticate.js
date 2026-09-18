@@ -3,5 +3,5 @@ export default function isAuthenticated(req, res, next) {
         return next();
     }
 
-    res.redirect("/login");
+    return res.status(401).json({ message: "Authentication required" });
 }

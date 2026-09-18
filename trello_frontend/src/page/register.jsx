@@ -29,7 +29,7 @@ export default function Register() {
 			navigate('/login');
 		} catch (error) {
 			console.error(error);
-			setMessage(error.response?.data?.message || 'Unable to create your account. Please try again.');
+			setMessage(error.response?.data?.message || 'The server could not be reached. Please make sure the backend is running.');
 		} finally {
 			setIsSubmitting(false);
 		}

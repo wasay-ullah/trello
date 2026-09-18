@@ -4,7 +4,6 @@ import isAuthenticated from "../middleware/authenticate.js";
 
 const router = express.Router();
 
-// 1. Create a column in a board
 router.post('/boards/:boardId/columns', isAuthenticated, async (req, res) => {
   try {
     const { boardId } = req.params;
@@ -14,7 +13,6 @@ router.post('/boards/:boardId/columns', isAuthenticated, async (req, res) => {
       return res.status(400).json({ message: 'Column title is required' });
     }
 
-    // Verify user owns the board
     const board = await Board.findOne({
       where: { id: boardId, userId: req.session.user.id },
     });
@@ -22,9 +20,7 @@ router.post('/boards/:boardId/columns', isAuthenticated, async (req, res) => {
       return res.status(404).json({ message: 'Board not found' });
     }
 
-    // Calculate position (next position at the end)
     const count = await Column.count({ where: { boardId } });
-
     const newColumn = await Column.create({
       title: title.trim(),
       boardId,
@@ -37,12 +33,10 @@ router.post('/boards/:boardId/columns', isAuthenticated, async (req, res) => {
   }
 });
 
-// 2. Rename a column
 router.put('/columns/:id', isAuthenticated, async (req, res) => {
   try {
     const { id } = req.params;
     const { title } = req.body;
-
     const column = await Column.findByPk(id, {
       include: [{ model: Board, where: { userId: req.session.user.id } }],
     });
@@ -62,11 +56,9 @@ router.put('/columns/:id', isAuthenticated, async (req, res) => {
   }
 });
 
-// 3. Delete a column
 router.delete('/columns/:id', isAuthenticated, async (req, res) => {
   try {
     const { id } = req.params;
-
     const column = await Column.findByPk(id, {
       include: [{ model: Board, where: { userId: req.session.user.id } }],
     });
@@ -77,6 +69,27 @@ router.delete('/columns/:id', isAuthenticated, async (req, res) => {
 
     await column.destroy();
     return res.json({ message: 'Column deleted successfully' });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/columns/reorder
+router.patch('/columns/reorder', isAuthenticated, async (req, res) => {
+  const { columnUpdates } = req.body; // array of { id, position }
+
+  try {
+    if (Array.isArray(columnUpdates)) {
+      await Promise.all(
+        columnUpdates.map((item) =>
+          Column.update(
+            { position: item.position },
+            { where: { id: item.id } }
+          )
+        )
+      );
+    }
+    return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

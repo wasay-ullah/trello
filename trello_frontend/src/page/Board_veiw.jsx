@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { DragDropContext, Droppable } from '@hello-pangea/dnd';
 import Column from './coloumn.jsx';
 import CardModal from './card.jsx';
 
@@ -13,15 +14,10 @@ export default function BoardView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Board title inline edit
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleText, setTitleText] = useState('');
-
-  // Add column state
   const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [newColumnTitle, setNewColumnTitle] = useState('');
-
-  // Selected card for detail modal
   const [selectedCard, setSelectedCard] = useState(null);
 
   useEffect(() => {
@@ -30,8 +26,21 @@ export default function BoardView() {
         const res = await fetch(`${API_BASE}/boards/${boardId}`, {
           credentials: 'include',
         });
-        if (!res.ok) throw new Error('Failed to load board');
+        if (!res.ok) {
+          if (res.status === 401) {
+            throw new Error('Please log in to view this board.');
+          }
+          if (res.status === 404) {
+            throw new Error('Board not found or you do not have access to it.');
+          }
+          throw new Error('Failed to load board.');
+        }
+
         const data = await res.json();
+        if (!data?.id || !data.title) {
+          throw new Error('The server returned an invalid board.');
+        }
+
         setBoard(data);
         setTitleText(data.title);
       } catch (err) {
@@ -85,7 +94,7 @@ export default function BoardView() {
 
       if (res.ok) {
         const createdColumn = await res.json();
-        createdColumn.cards = []; // default cards array
+        createdColumn.cards = [];
         setBoard((prev) => ({
           ...prev,
           columns: [...(prev.columns || []), createdColumn],
@@ -114,7 +123,6 @@ export default function BoardView() {
     }));
   };
 
-  // Card Handlers
   const handleCardAdded = (columnId, newCard) => {
     setBoard((prev) => ({
       ...prev,
@@ -125,6 +133,7 @@ export default function BoardView() {
   };
 
   const handleCardUpdated = (updatedCard) => {
+    setSelectedCard(updatedCard);
     setBoard((prev) => ({
       ...prev,
       columns: prev.columns.map((col) =>
@@ -135,6 +144,13 @@ export default function BoardView() {
             }
           : col
       ),
+    }));
+  };
+
+  const handleLabelCreated = (createdLabel) => {
+    setBoard((prev) => ({
+      ...prev,
+      labels: [...(prev.labels || []), createdLabel],
     }));
   };
 
@@ -152,12 +168,119 @@ export default function BoardView() {
     }));
   };
 
+  // Drag and Drop End Handler
+  const handleDragEnd = async (result) => {
+    const { source, destination, type } = result;
+
+    if (!destination) return;
+    if (
+      source.droppableId === destination.droppableId &&
+      source.index === destination.index
+    ) {
+      return;
+    }
+
+    if (type === 'COLUMN') {
+      const reorderedColumns = Array.from(board.columns);
+      const [movedColumn] = reorderedColumns.splice(source.index, 1);
+      reorderedColumns.splice(destination.index, 0, movedColumn);
+
+      setBoard((prev) => ({ ...prev, columns: reorderedColumns }));
+
+      try {
+        const response = await fetch(`${API_BASE}/columns/reorder`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            columnUpdates: reorderedColumns.map((column, position) => ({
+              id: column.id,
+              position,
+            })),
+          }),
+        });
+
+        if (!response.ok) throw new Error('Column order was not saved');
+      } catch (err) {
+        console.error('Failed to save column order:', err);
+      }
+      return;
+    }
+
+    const sourceColumnId = Number(source.droppableId);
+    const destinationColumnId = Number(destination.droppableId);
+    const sourceColumn = board.columns.find((column) => column.id === sourceColumnId);
+    const destinationColumn = board.columns.find((column) => column.id === destinationColumnId);
+
+    if (!sourceColumn || !destinationColumn) return;
+
+    const sourceCards = [...(sourceColumn.cards || [])];
+    const destinationCards = sourceColumnId === destinationColumnId
+      ? sourceCards
+      : [...(destinationColumn.cards || [])];
+    const [movedCard] = sourceCards.splice(source.index, 1);
+
+    if (!movedCard) return;
+
+    movedCard.columnId = destinationColumnId;
+    destinationCards.splice(destination.index, 0, movedCard);
+
+    const nextColumns = board.columns.map((column) => {
+      if (column.id === sourceColumnId && sourceColumnId === destinationColumnId) {
+        return { ...column, cards: destinationCards };
+      }
+      if (column.id === sourceColumnId) return { ...column, cards: sourceCards };
+      if (column.id === destinationColumnId) return { ...column, cards: destinationCards };
+      return column;
+    });
+
+    setBoard((prev) => ({ ...prev, columns: nextColumns }));
+
+    const columnUpdates = [];
+    sourceCards.forEach((card, position) => {
+      columnUpdates.push({ id: card.id, position, columnId: sourceColumnId });
+    });
+    if (sourceColumnId !== destinationColumnId) {
+      destinationCards.forEach((card, position) => {
+        columnUpdates.push({ id: card.id, position, columnId: destinationColumnId });
+      });
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/cards/reorder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ columnUpdates }),
+      });
+
+      if (!response.ok) throw new Error('Card order was not saved');
+    } catch (err) {
+      console.error('Failed to save card positions:', err);
+    }
+  };
+
   if (loading) return <div className="p-8 text-gray-500">Loading board...</div>;
-  if (error) return <div className="p-8 text-red-500">{error}</div>;
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-100 p-8">
+        <p className="text-red-500">{error}</p>
+        <button
+          type="button"
+          onClick={() => navigate('/dashboard')}
+          className="mt-4 text-blue-600 hover:underline"
+        >
+          Back to boards
+        </button>
+      </div>
+    );
+  }
+
+  if (!board) return null;
 
   return (
     <div className="h-screen flex flex-col bg-slate-100 overflow-hidden">
-      {/* Top Header */}
+      {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
           <button
@@ -195,67 +318,81 @@ export default function BoardView() {
         </div>
       </header>
 
-      {/* Horizontal Kanban Canvas */}
-      <main className="flex-1 p-6 overflow-x-auto flex items-start gap-4">
-        {board.columns &&
-          board.columns.map((col) => (
-            <Column
-              key={col.id}
-              column={col}
-              onColumnUpdated={handleColumnUpdated}
-              onColumnDeleted={handleColumnDeleted}
-              onCardAdded={handleCardAdded}
-              onSelectCard={(card) => setSelectedCard(card)}
-            />
-          ))}
+      {/* DnD Context Canvas */}
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <Droppable droppableId="all-columns" direction="horizontal" type="COLUMN">
+          {(provided) => (
+            <main
+              ref={provided.innerRef}
+              {...provided.droppableProps}
+              className="flex-1 p-6 overflow-x-auto flex items-start gap-4"
+            >
+              {board.columns?.map((col, index) => (
+                <Column
+                  key={col.id}
+                  index={index}
+                  column={col}
+                  onColumnUpdated={handleColumnUpdated}
+                  onColumnDeleted={handleColumnDeleted}
+                  onCardAdded={handleCardAdded}
+                  onSelectCard={(card) => setSelectedCard(card)}
+                />
+              ))}
+              {provided.placeholder}
 
-        {/* Add Column Section */}
-        {isAddingColumn ? (
-          <form
-            onSubmit={handleAddColumn}
-            className="w-72 bg-gray-100 rounded-xl p-3 shrink-0 shadow-sm border border-gray-200"
-          >
-            <input
-              type="text"
-              autoFocus
-              placeholder="Enter column title..."
-              value={newColumnTitle}
-              onChange={(e) => setNewColumnTitle(e.target.value)}
-              className="w-full text-sm border border-gray-300 rounded p-2 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <div className="flex items-center gap-2">
-              <button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded font-medium shadow-sm transition"
-              >
-                Add Column
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAddingColumn(false);
-                  setNewColumnTitle('');
-                }}
-                className="text-gray-500 hover:text-gray-700 text-xs px-2 py-1.5"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        ) : (
-          <button
-            onClick={() => setIsAddingColumn(true)}
-            className="w-72 bg-white/70 hover:bg-white text-gray-600 hover:text-gray-800 text-sm font-medium py-2.5 px-4 rounded-xl border border-dashed border-gray-300 shrink-0 text-left transition flex items-center gap-2 shadow-sm"
-          >
-            <span className="text-lg leading-none">+</span> Add another column
-          </button>
-        )}
-      </main>
+              {/* Add Column Section */}
+              {isAddingColumn ? (
+                <form
+                  onSubmit={handleAddColumn}
+                  className="w-72 bg-gray-100 rounded-xl p-3 shrink-0 shadow-sm border border-gray-200"
+                >
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Enter column title..."
+                    value={newColumnTitle}
+                    onChange={(e) => setNewColumnTitle(e.target.value)}
+                    className="w-full text-sm border border-gray-300 rounded p-2 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="submit"
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded font-medium shadow-sm transition"
+                    >
+                      Add Column
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingColumn(false);
+                        setNewColumnTitle('');
+                      }}
+                      className="text-gray-500 hover:text-gray-700 text-xs px-2 py-1.5"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <button
+                  onClick={() => setIsAddingColumn(true)}
+                  className="w-72 bg-white/70 hover:bg-white text-gray-600 hover:text-gray-800 text-sm font-medium py-2.5 px-4 rounded-xl border border-dashed border-gray-300 shrink-0 text-left transition flex items-center gap-2 shadow-sm"
+                >
+                  <span className="text-lg leading-none">+</span> Add another column
+                </button>
+              )}
+            </main>
+          )}
+        </Droppable>
+      </DragDropContext>
 
       {/* Card Details Modal */}
       {selectedCard && (
         <CardModal
           card={selectedCard}
+          boardId={boardId}
+          boardLabels={board.labels || []}
+          onLabelCreated={handleLabelCreated}
           onClose={() => setSelectedCard(null)}
           onCardUpdated={handleCardUpdated}
           onCardDeleted={handleCardDeleted}

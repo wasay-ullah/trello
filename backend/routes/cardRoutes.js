@@ -81,4 +81,26 @@ router.delete("/cards/:id", isAuthenticated, async (req, res) => {
   }
 });
 
+// PATCH /api/cards/reorder
+router.patch('/cards/reorder',isAuthenticated, async (req, res) => {
+  const { cardId, sourceColumnId, targetColumnId, newPosition, columnUpdates } = req.body;
+
+  try {
+    // columnUpdates is an array of { id, position, columnId }
+    if (Array.isArray(columnUpdates)) {
+      await Promise.all(
+        columnUpdates.map((item) =>
+          Card.update(
+            { position: item.position, columnId: item.columnId },
+            { where: { id: item.id } }
+          )
+        )
+      );
+    }
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

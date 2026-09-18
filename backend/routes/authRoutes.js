@@ -6,6 +6,28 @@ import { sequelize } from "../config/connect_db.js";
 const router = express.Router();
 const User = sequelize.models.User || UserModel(sequelize);
 
+router.post("/register", async (req, res) => {
+  try {
+    await connection();
+    const { name, email, password } = req.body;
+
+    if (!name?.trim() || !email?.trim() || !password) {
+      return res.status(400).json({ message: "name, email, and password are required" });
+    }
+
+    const user = await User.create({
+      name: name.trim(),
+      email: email.trim(),
+      password,
+    });
+
+    return res.status(201).json({ message: "user created successfully", username: user.name });
+  } catch (error) {
+    console.error("Registration failed:", error);
+    return res.status(500).json({ message: "Unable to create your account" });
+  }
+});
+
 router.post("/login", async (req, res) => {
   try {
     await connection();
@@ -13,16 +35,17 @@ router.post("/login", async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ message: "email and password are required" });
     }
+
     const user = await User.findOne({ where: { email, password } });
     if (!user) {
       return res.status(401).json({ message: "Invalid email or password" });
-    } 
+    }
+
     req.session.user = { id: user.id, email: user.email };
-    res.status(200).json({ message: "Login successful", username: user.name });
-    console.log("User logged in:", req.session.user);
-  }
-  catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(200).json({ message: "Login successful", username: user.name });
+  } catch (error) {
+    console.error("Login failed:", error);
+    return res.status(500).json({ message: error.message });
   }
 });
 

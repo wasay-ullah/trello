@@ -31,8 +31,10 @@ export default function Login() {
                 setMessage('The email or password is incorrect.');
             } else if (error.response?.status === 400) {
                 setMessage(error.response.data.message || 'Please enter your email and password.');
+            } else if (error.response?.data?.message) {
+              setMessage(error.response.data.message);
             } else {
-                setMessage('Unable to log in right now. Please try again.');
+              setMessage('The server could not be reached. Please make sure the backend is running.');
             }
         } finally {
             setIsSubmitting(false);
