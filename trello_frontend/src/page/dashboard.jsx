@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-const API_BASE = 'http://localhost:3000/api/boards';
+import api from '../api/axios';
 
 export default function Dashboard() {
   const [boards, setBoards] = useState([]);
@@ -13,11 +12,7 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch('http://localhost:3000/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-      if (!response.ok) throw new Error('Unable to log out');
+      await api.post('/logout');
       navigate('/login', { replace: true });
     } catch (error) {
       console.error(error);
@@ -25,12 +20,8 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    fetch(API_BASE, { credentials: 'include' })
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch boards');
-        return res.json();
-      })
-      .then((data) => setBoards(data))
+    api.get('/api/boards')
+      .then(({ data }) => setBoards(data))
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
   }, []);
@@ -52,30 +43,17 @@ export default function Dashboard() {
     e.preventDefault();
     if (!formData.title.trim()) return;
 
-    if (editingBoard) {
-      const res = await fetch(`${API_BASE}/${editingBoard.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(formData),
-      });
-      if (res.ok) {
-        const updated = await res.json();
+    try {
+      if (editingBoard) {
+        const { data: updated } = await api.put(`/api/boards/${editingBoard.id}`, formData);
         setBoards((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
-        setIsModalOpen(false);
-      }
-    } else {
-      const res = await fetch(API_BASE, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(formData),
-      });
-      if (res.ok) {
-        const created = await res.json();
+      } else {
+        const { data: created } = await api.post('/api/boards', formData);
         setBoards((prev) => [created, ...prev]);
-        setIsModalOpen(false);
       }
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -83,11 +61,12 @@ export default function Dashboard() {
     e.stopPropagation();
     if (!window.confirm(`Delete "${title}"?`)) return;
 
-    const res = await fetch(`${API_BASE}/${id}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-    if (res.ok) setBoards((prev) => prev.filter((b) => b.id !== id));
+    try {
+      await api.delete(`/api/boards/${id}`);
+      setBoards((prev) => prev.filter((b) => b.id !== id));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   if (loading) return <div className="loading">Loading your boards...</div>;

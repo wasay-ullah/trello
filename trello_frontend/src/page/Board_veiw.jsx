@@ -3,8 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable } from '@hello-pangea/dnd';
 import Column from './coloumn.jsx';
 import CardModal from './card.jsx';
-
-const API_BASE = 'http://localhost:3000/api';
+import api from '../api/axios';
 
 export default function BoardView() {
   const { boardId } = useParams();
@@ -22,18 +21,15 @@ export default function BoardView() {
   useEffect(() => {
     const fetchBoard = async () => {
       try {
-        const res = await fetch(`${API_BASE}/boards/${boardId}`, { credentials: 'include' });
-        if (!res.ok) {
-          if (res.status === 401) throw new Error('Please log in to view this board.');
-          if (res.status === 404) throw new Error('Board not found or you do not have access.');
-          throw new Error('Failed to load board.');
-        }
-        const data = await res.json();
+        const { data } = await api.get(`/api/boards/${boardId}`);
         if (!data?.id || !data.title) throw new Error('The server returned an invalid board.');
         setBoard(data);
         setTitleText(data.title);
       } catch (err) {
-        setError(err.message);
+        const status = err.response?.status;
+        if (status === 401) setError('Please log in to view this board.');
+        else if (status === 404) setError('Board not found or you do not have access.');
+        else setError(err.message || 'Failed to load board.');
       } finally {
         setLoading(false);
       }
@@ -48,18 +44,8 @@ export default function BoardView() {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/boards/${boardId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ title: titleText.trim() }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setBoard((prev) => ({ ...prev, title: updated.title }));
-      } else {
-        setTitleText(board.title);
-      }
+      const { data: updated } = await api.put(`/api/boards/${boardId}`, { title: titleText.trim() });
+      setBoard((prev) => ({ ...prev, title: updated.title }));
     } catch (err) {
       console.error(err);
       setTitleText(board.title);
@@ -70,19 +56,13 @@ export default function BoardView() {
     e.preventDefault();
     if (!newColumnTitle.trim()) return;
     try {
-      const res = await fetch(`${API_BASE}/boards/${boardId}/columns`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ title: newColumnTitle.trim() }),
+      const { data: createdColumn } = await api.post(`/api/boards/${boardId}/columns`, {
+        title: newColumnTitle.trim(),
       });
-      if (res.ok) {
-        const createdColumn = await res.json();
-        createdColumn.cards = [];
-        setBoard((prev) => ({ ...prev, columns: [...(prev.columns || []), createdColumn] }));
-        setNewColumnTitle('');
-        setIsAddingColumn(false);
-      }
+      createdColumn.cards = [];
+      setBoard((prev) => ({ ...prev, columns: [...(prev.columns || []), createdColumn] }));
+      setNewColumnTitle('');
+      setIsAddingColumn(false);
     } catch (err) {
       console.error(err);
     }
@@ -146,15 +126,9 @@ export default function BoardView() {
       reorderedColumns.splice(destination.index, 0, movedColumn);
       setBoard((prev) => ({ ...prev, columns: reorderedColumns }));
       try {
-        const response = await fetch(`${API_BASE}/columns/reorder`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            columnUpdates: reorderedColumns.map((column, position) => ({ id: column.id, position })),
-          }),
+        await api.patch('/api/columns/reorder', {
+          columnUpdates: reorderedColumns.map((column, position) => ({ id: column.id, position })),
         });
-        if (!response.ok) throw new Error('Column order was not saved');
       } catch (err) {
         console.error('Failed to save column order:', err);
       }
@@ -191,13 +165,7 @@ export default function BoardView() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/cards/reorder`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ columnUpdates }),
-      });
-      if (!response.ok) throw new Error('Card order was not saved');
+      await api.patch('/api/cards/reorder', { columnUpdates });
     } catch (err) {
       console.error('Failed to save card positions:', err);
     }

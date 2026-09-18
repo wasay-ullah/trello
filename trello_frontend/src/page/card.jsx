@@ -1,6 +1,5 @@
 import { useState } from 'react';
-
-const API_BASE = 'http://localhost:3000/api';
+import api from '../api/axios';
 
 export default function CardModal({ card, boardId, boardLabels = [], onLabelCreated, onClose, onCardUpdated, onCardDeleted }) {
   const [title, setTitle] = useState(card.title);
@@ -12,31 +11,29 @@ export default function CardModal({ card, boardId, boardLabels = [], onLabelCrea
 
   const handleCreateLabel = async () => {
     if (!newLabelName.trim()) return;
-    const response = await fetch(`${API_BASE}/boards/${boardId}/labels`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ name: newLabelName.trim(), color: newLabelColor }),
-    });
-    if (response.ok) {
-      onLabelCreated(await response.json());
+    try {
+      const { data } = await api.post(`/api/boards/${boardId}/labels`, {
+        name: newLabelName.trim(),
+        color: newLabelColor,
+      });
+      onLabelCreated(data);
       setNewLabelName('');
+    } catch (err) {
+      console.error(err);
     }
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_BASE}/cards/${card.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ title, description, dueDate: dueDate || null, isCompleted }),
+      const { data } = await api.put(`/api/cards/${card.id}`, {
+        title,
+        description,
+        dueDate: dueDate || null,
+        isCompleted,
       });
-      if (res.ok) {
-        onCardUpdated(await res.json());
-        onClose();
-      }
+      onCardUpdated(data);
+      onClose();
     } catch (err) {
       console.error(err);
     }
@@ -45,11 +42,20 @@ export default function CardModal({ card, boardId, boardLabels = [], onLabelCrea
   const handleDelete = async () => {
     if (!window.confirm('Delete this card?')) return;
     try {
-      const res = await fetch(`${API_BASE}/cards/${card.id}`, { method: 'DELETE', credentials: 'include' });
-      if (res.ok) {
-        onCardDeleted(card.id, card.columnId);
-        onClose();
-      }
+      await api.delete(`/api/cards/${card.id}`);
+      onCardDeleted(card.id, card.columnId);
+      onClose();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const toggleLabel = async (lbl, isAttached) => {
+    try {
+      const { data } = isAttached
+        ? await api.delete(`/api/cards/${card.id}/labels/${lbl.id}`)
+        : await api.post(`/api/cards/${card.id}/labels/${lbl.id}`);
+      onCardUpdated(data);
     } catch (err) {
       console.error(err);
     }
@@ -83,13 +89,7 @@ export default function CardModal({ card, boardId, boardLabels = [], onLabelCrea
                   <button
                     key={lbl.id}
                     type="button"
-                    onClick={async () => {
-                      const res = await fetch(`${API_BASE}/cards/${card.id}/labels/${lbl.id}`, {
-                        method: isAttached ? 'DELETE' : 'POST',
-                        credentials: 'include',
-                      });
-                      if (res.ok) onCardUpdated(await res.json());
-                    }}
+                    onClick={() => toggleLabel(lbl, isAttached)}
                     style={{ backgroundColor: isAttached ? lbl.color : 'var(--surface)', color: isAttached ? '#fff' : 'var(--text)' }}
                     className="btn btn-sm"
                   >

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
-
-const API_BASE = 'http://localhost:3000/api';
+import api from '../api/axios';
 
 export default function Column({
   column,
@@ -23,14 +22,8 @@ export default function Column({
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/columns/${column.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ title: title.trim() }),
-      });
-      if (res.ok) onColumnUpdated(await res.json());
-      else setTitle(column.title);
+      const { data } = await api.put(`/api/columns/${column.id}`, { title: title.trim() });
+      onColumnUpdated(data);
     } catch (err) {
       console.error(err);
       setTitle(column.title);
@@ -45,11 +38,8 @@ export default function Column({
     if (!window.confirm(msg)) return;
 
     try {
-      const res = await fetch(`${API_BASE}/columns/${column.id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      if (res.ok) onColumnDeleted(column.id);
+      await api.delete(`/api/columns/${column.id}`);
+      onColumnDeleted(column.id);
     } catch (err) {
       console.error(err);
     }
@@ -59,17 +49,10 @@ export default function Column({
     e.preventDefault();
     if (!newCardTitle.trim()) return;
     try {
-      const res = await fetch(`${API_BASE}/columns/${column.id}/cards`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ title: newCardTitle.trim() }),
-      });
-      if (res.ok) {
-        onCardAdded(column.id, await res.json());
-        setNewCardTitle('');
-        setIsAddingCard(false);
-      }
+      const { data } = await api.post(`/api/columns/${column.id}/cards`, { title: newCardTitle.trim() });
+      onCardAdded(column.id, data);
+      setNewCardTitle('');
+      setIsAddingCard(false);
     } catch (err) {
       console.error(err);
     }
