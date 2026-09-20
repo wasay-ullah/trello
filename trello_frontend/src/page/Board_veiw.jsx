@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable } from '@hello-pangea/dnd';
 import Column from './coloumn.jsx';
 import CardModal from './card.jsx';
 import api from '../api/axios';
+import useDebounce from '../../hooks/useDebounce';
+
 
 export default function BoardView() {
   const { boardId } = useParams();
@@ -17,6 +19,14 @@ export default function BoardView() {
   const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [newColumnTitle, setNewColumnTitle] = useState('');
   const [selectedCard, setSelectedCard] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebounce(searchTerm, 250);
+  // Filter States
+const [showFilters, setShowFilters] = useState(false);
+const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'completed', 'incomplete'
+const [filterDueDate, setFilterDueDate] = useState('all'); // 'all', 'overdue', 'today'
+const [filterLabels, setFilterLabels] = useState([]); // Array of label IDs
+  
 
   useEffect(() => {
     const fetchBoard = async () => {
@@ -36,6 +46,47 @@ export default function BoardView() {
     };
     fetchBoard();
   }, [boardId]);
+
+const displayColumns = useMemo(() => {
+  if (!board?.columns) return [];
+
+  const query = debouncedSearch.toLowerCase().trim();
+  
+  // Get today's date string in YYYY-MM-DD format for accurate comparison
+  const today = new Date();
+  const todayStr = today.toLocaleDateString('en-CA'); // 'YYYY-MM-DD' local time
+
+  return board.columns.map((col) => ({
+    ...col,
+    cards: (col.cards || []).filter((card) => {
+      // 1. Search
+      const titleMatch = card.title?.toLowerCase().includes(query);
+      const descMatch = card.description?.toLowerCase().includes(query);
+      const matchesSearch = !query || titleMatch || descMatch;
+
+      // 2. Status
+      let matchesStatus = true;
+      if (filterStatus === 'completed') matchesStatus = card.isCompleted;
+      if (filterStatus === 'incomplete') matchesStatus = !card.isCompleted;
+
+      // 3. Due Date
+      let matchesDue = true;
+      if (filterDueDate === 'today') {
+        matchesDue = card.dueDate === todayStr;
+      } else if (filterDueDate === 'overdue') {
+        matchesDue = card.dueDate && card.dueDate < todayStr && !card.isCompleted;
+      }
+
+      // 4. Labels (Card must have at least one of the selected labels)
+      let matchesLabels = true;
+      if (filterLabels.length > 0) {
+        matchesLabels = card.labels?.some((lbl) => filterLabels.includes(lbl.id));
+      }
+
+      return matchesSearch && matchesStatus && matchesDue && matchesLabels;
+    }),
+  }));
+}, [board?.columns, debouncedSearch, filterStatus, filterDueDate, filterLabels]);
 
   const handleSaveTitle = async () => {
     setIsEditingTitle(false);
@@ -207,13 +258,113 @@ export default function BoardView() {
             <h1 onClick={() => setIsEditingTitle(true)} title="Click to rename">{board.title}</h1>
           )}
         </div>
+        {/* Search Bar */}
+<div className="relative flex items-center">
+  <input
+    type="text"
+    value={searchTerm}
+    onChange={(e) => setSearchTerm(e.target.value)}
+    placeholder="Search cards by title or description..."
+    className="w-64 md:w-80 text-xs border border-gray-300 rounded-lg pl-8 pr-7 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+  />
+  <span className="absolute left-2.5 text-gray-400 text-xs pointer-events-none">🔍</span>
+  {searchTerm && (
+    <button
+      onClick={() => setSearchTerm('')}
+      className="absolute right-2 text-xs text-gray-400 hover:text-gray-600"
+    >
+      ✕
+    </button>
+  )}
+</div>
+{/* Filter Toggle Button */}
+  <button
+    onClick={() => setShowFilters(!showFilters)}
+    className={`text-xs px-3 py-1.5 rounded-md font-medium transition ${
+      showFilters || filterStatus !== 'all' || filterDueDate !== 'all' || filterLabels.length > 0
+        ? 'bg-blue-100 text-blue-700'
+        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+    }`}
+  >
+    ⚙️ Filters
+  </button>
       </header>
+      {/* Filter Toolbar Sub-header */}
+{showFilters && (
+  <div className="bg-white border-b border-gray-200 px-6 py-3 flex flex-wrap gap-6 items-center shadow-sm text-sm">
+    {/* Status Filter */}
+    <div className="flex items-center gap-2">
+      <span className="font-semibold text-gray-600 text-xs">Status:</span>
+      <select
+        value={filterStatus}
+        onChange={(e) => setFilterStatus(e.target.value)}
+        className="text-xs border border-gray-300 rounded p-1 outline-none"
+      >
+        <option value="all">All</option>
+        <option value="incomplete">Incomplete</option>
+        <option value="completed">Completed</option>
+      </select>
+    </div>
+
+    {/* Due Date Filter */}
+    <div className="flex items-center gap-2">
+      <span className="font-semibold text-gray-600 text-xs">Due:</span>
+      <select
+        value={filterDueDate}
+        onChange={(e) => setFilterDueDate(e.target.value)}
+        className="text-xs border border-gray-300 rounded p-1 outline-none"
+      >
+        <option value="all">Any time</option>
+        <option value="today">Due Today</option>
+        <option value="overdue">Overdue</option>
+      </select>
+    </div>
+
+    {/* Labels Filter */}
+    <div className="flex items-center gap-2">
+      <span className="font-semibold text-gray-600 text-xs">Labels:</span>
+      <div className="flex flex-wrap gap-1">
+        {board.labels?.map((lbl) => {
+          const isActive = filterLabels.includes(lbl.id);
+          return (
+            <button
+              key={lbl.id}
+              onClick={() => {
+                setFilterLabels((prev) =>
+                  isActive ? prev.filter((id) => id !== lbl.id) : [...prev, lbl.id]
+                );
+              }}
+              style={{ backgroundColor: isActive ? lbl.color : '#f3f4f6', color: isActive ? '#fff' : '#374151' }}
+              className="text-[10px] px-2 py-0.5 rounded-full font-medium transition"
+            >
+              {lbl.name}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+
+    {/* Clear All Filters */}
+    {(filterStatus !== 'all' || filterDueDate !== 'all' || filterLabels.length > 0) && (
+      <button
+        onClick={() => {
+          setFilterStatus('all');
+          setFilterDueDate('all');
+          setFilterLabels([]);
+        }}
+        className="text-xs text-red-500 hover:text-red-700 ml-auto font-medium"
+      >
+        Clear Filters
+      </button>
+    )}
+  </div>
+)}
 
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId="all-columns" direction="horizontal" type="COLUMN">
           {(provided) => (
             <main ref={provided.innerRef} {...provided.droppableProps} className="board-canvas">
-              {board.columns?.map((col, index) => (
+              {displayColumns.map((col, index) => (
                 <Column
                   key={col.id}
                   index={index}
