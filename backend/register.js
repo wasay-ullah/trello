@@ -25,8 +25,6 @@ app.use(cors({
   credentials: true, 
 }));
 
-
-
 app.use(authRouter);
 app.use("/api/boards", boardRouter);
 app.use('/api', columnRouter);

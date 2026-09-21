@@ -47,8 +47,9 @@ const [filterLabels, setFilterLabels] = useState([]); // Array of label IDs
     fetchBoard();
   }, [boardId]);
 
+const columns = board?.columns;
 const displayColumns = useMemo(() => {
-  if (!board?.columns) return [];
+  if (!columns) return [];
 
   const query = debouncedSearch.toLowerCase().trim();
   
@@ -56,7 +57,7 @@ const displayColumns = useMemo(() => {
   const today = new Date();
   const todayStr = today.toLocaleDateString('en-CA'); // 'YYYY-MM-DD' local time
 
-  return board.columns.map((col) => ({
+  return columns.map((col) => ({
     ...col,
     cards: (col.cards || []).filter((card) => {
       // 1. Search
@@ -86,7 +87,7 @@ const displayColumns = useMemo(() => {
       return matchesSearch && matchesStatus && matchesDue && matchesLabels;
     }),
   }));
-}, [board?.columns, debouncedSearch, filterStatus, filterDueDate, filterLabels]);
+}, [columns, debouncedSearch, filterStatus, filterDueDate, filterLabels]);
 
   const handleSaveTitle = async () => {
     setIsEditingTitle(false);

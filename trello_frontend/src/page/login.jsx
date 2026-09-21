@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import api from '../api/axios'
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 export default function Login() {
   const navigate = useNavigate();
-  const [message, setMessage] = useState('');
+  const location = useLocation();
+  const [message, setMessage] = useState(location.state?.message || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({ email: '', password: '' });
 
@@ -17,8 +18,11 @@ export default function Login() {
     setMessage('');
     setIsSubmitting(true);
     try {
-      await api.post('/login', formData);
-      navigate('/dashboard');
+      await api.post('/login', {
+        email: formData.email.trim(),
+        password: formData.password,
+      });
+      navigate('/dashboard', { replace: true });
     } catch (error) {
       console.error(error);
       if (error.response?.status === 401) {

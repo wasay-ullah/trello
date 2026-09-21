@@ -22,9 +22,18 @@ export default function Dashboard() {
   useEffect(() => {
     api.get('/api/boards')
       .then(({ data }) => setBoards(data))
-      .catch((err) => console.error(err))
+      .catch((err) => {
+        if (err.response?.status === 401) {
+          navigate('/login', {
+            replace: true,
+            state: { message: 'Your session could not be restored. Please log in again.' },
+          });
+          return;
+        }
+        console.error(err);
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [navigate]);
 
   const openCreateModal = () => {
     setEditingBoard(null);

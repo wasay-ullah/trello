@@ -4,7 +4,7 @@ import UserModel from "../models/models.js";
 import { sequelize } from "../config/connect_db.js";
 
 const router = express.Router();
-const User = sequelize.models.User || UserModel(sequelize);
+const User = UserModel(sequelize);
 
 router.post("/register", async (req, res) => {
   try {
