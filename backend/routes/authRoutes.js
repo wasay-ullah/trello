@@ -15,15 +15,24 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ message: "name, email, and password are required" });
     }
 
+    const normalizedEmail = email.trim();
+    const existingUser = await User.findOne({ where: { email: normalizedEmail } });
+    if (existingUser) {
+      return res.status(409).json({ message: "You already have an account with this email" });
+    }
+
     const user = await User.create({
       name: name.trim(),
-      email: email.trim(),
+      email: normalizedEmail,
       password,
     });
 
     return res.status(201).json({ message: "user created successfully", username: user.name });
   } catch (error) {
     console.error("Registration failed:", error);
+    if (error.name === "SequelizeUniqueConstraintError") {
+      return res.status(409).json({ message: "You already have an account with this email" });
+    }
     return res.status(500).json({ message: "Unable to create your account" });
   }
 });

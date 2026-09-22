@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import session from "express-session";
 import authRouter from "./routes/authRoutes.js";
@@ -12,16 +13,16 @@ import labelRoutes from "./routes/labelRoutes.js";
 const app = express();
 app.use(express.json());
 app.use(session({
-  secret: "your-secret-key",
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: true,
   cookie:{
-    maxAge: 1000 * 60 * 60, 
+    maxAge: Number(process.env.SESSION_MAX_AGE),
   } 
 }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({
-  origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+  origin: process.env.FRONTEND_ORIGINS.split(","),
   credentials: true, 
 }));
 
@@ -35,7 +36,7 @@ app.get("/login", (req, res) => {
   res.status(200).json({ message: "Send a POST request with email and password to log in" });
 });
 
-const port = 3000;
+const port = Number(process.env.PORT);
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });

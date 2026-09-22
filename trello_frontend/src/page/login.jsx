@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import api from '../api/axios'
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -63,6 +63,8 @@ export default function Login() {
         <button className="btn btn-primary btn-full" type="submit" disabled={isSubmitting}>
           {isSubmitting ? 'Logging in...' : 'Log in'}
         </button>
+       <p className="text-center text-muted"> No Account ?<Link className="link" to="/register">Register Here</Link>
+        </p>
       </form>
     </main>
   );
